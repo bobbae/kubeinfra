@@ -1,0 +1,22 @@
+[DHCP]
+Enabled = true
+ServerIP = "172.24.4.1"
+RouterIP = "172.24.4.1"
+NameServerIP = "8.8.8.8"
+SubnetMask = "255.255.255.0"
+Interface = "br-ex"
+StartIP = "172.24.4.100"
+Duration = 2
+LeaseRange = 50
+
+[Proxy]
+Enabled = true
+RemoteAddr = "10.0.0.3:80"
+RemoteTLS = false
+LocalTLS = false
+LocalAddr = ":4444"
+#LocalCert = "local.cert"
+#LocalKey = "local.key"
+
+[RESTAPI]
+Enabled = true

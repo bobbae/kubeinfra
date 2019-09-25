@@ -1,0 +1,37 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.define "master1" do |subconfig|
+    subconfig.vm.hostname = "master1"
+    subconfig.vm.box = "bento/ubuntu-16.04"
+    subconfig.vm.network :private_network, ip: "10.10.10.10"
+    subconfig.vm.network :public_network, ip: "192.168.1.211"
+    subconfig.vm.synced_folder "shared/", "/shared"
+    subconfig.vm.provider "virtualbox" do |vb|
+      vb.memory = "4096"
+      vb.cpus = 4
+    end
+    subconfig.vm.provision "shell", inline: <<-SHELL
+      /shared/install-k8s-base.sh
+      /shared/install-k8s-master.sh eth2 192.168.1.211 192.168.1.211
+    SHELL
+  end
+  (1..2).each do |i|
+    config.vm.define "node#{i}" do |subconfig|
+      subconfig.vm.box = "bento/ubuntu-16.04"
+      subconfig.vm.hostname = "node#{i}"
+      subconfig.vm.synced_folder "shared/", "/shared"
+      subconfig.vm.network :private_network, ip: "10.10.10.#{i + 10}"
+      subconfig.vm.network :public_network, ip: "192.168.1.#{i + 211}"
+      subconfig.vm.provider "virtualbox" do |v|
+        v.memory = 2048
+        v.cpus = 2
+      end
+      subconfig.vm.provision "shell", inline: <<-SHELL
+        /shared/install-k8s-base.sh
+	/shared/install-k8s-node.sh eth2 192.168.1.211 "192.168.1.#{i + 211}"
+      SHELL
+    end
+  end
+end

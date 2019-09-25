@@ -1,0 +1,28 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.define "devstack" do |subconfig|
+    #subconfig.vm.hostname = "devstack"
+    subconfig.vm.box = "bento/ubuntu-16.04"
+    subconfig.vm.network "private_network", type: "dhcp"
+    subconfig.vm.synced_folder "shared/", "/shared"
+    subconfig.vm.provider "virtualbox" do |vb|
+      vb.memory = "8192"
+      vb.cpus = 8
+    end
+    subconfig.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+      useradd -s /bin/bash -d /opt/stack -m stack
+      echo "stack ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/stack
+      sudo -H -u stack sh -c 'cd /opt/stack; git clone https://github.com/openstack-dev/devstack.git -b stable/queens devstack'
+      /shared/fixlocalip.sh /shared/local.tmpl /opt/stack/devstack/local.conf
+      ip ad > /shared/ipaddresses
+      cp /opt/stack/devstack/local.conf  /shared/local.conf
+      cp /opt/stack/devstack/openrc  /shared/openrc
+      source /opt/stack/dev/stack/openrc admin admin 
+      env |grep OS_ > /shared/openrc.env
+      sudo -H -u stack sh -c 'cd /opt/stack/devstack; ./stack.sh' | tee /shared/devstack.log
+    SHELL
+  end
+end

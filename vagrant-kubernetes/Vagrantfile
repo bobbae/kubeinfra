@@ -1,0 +1,67 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+BOX_IMAGE = "ubuntu/xenial64"
+$script = <<-SCRIPT
+apt-get update
+apt-get -y install apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - 
+apt-key fingerprint 0EBFCD88
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+apt-get update
+apt-get -y install docker-ce
+apt-get update && apt-get install -y apt-transport-https curl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+echo deb http://apt.kubernetes.io/ kubernetes-xenial main >/etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y kubelet kubeadm kubectl
+swapoff -a
+sed '/ExecStart=/a Environment="KUBELET_EXTRA_ARGS=--cgroup-driver=cgroupfs"' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+ifconfig -a
+SCRIPT
+
+Vagrant.configure("2") do |config|
+  config.vm.define "master" do |subconfig|
+    subconfig.vm.box = BOX_IMAGE
+    subconfig.vm.hostname = "master"
+    subconfig.vm.network :private_network, ip: "10.0.0.10"
+    subconfig.vm.provider "virtualbox" do |v|
+      v.memory = 8196
+      v.cpus = 4
+    end
+    subconfig.vm.synced_folder "shared/", "/shared"
+    subconfig.vm.provision "bootstrap", type: "shell", inline: $script
+    subconfig.vm.provision "kubernetes", type: "shell", inline: <<-SHELL
+      kubeadm reset
+      kubeadm init --apiserver-advertise-address=10.0.0.10
+      export KUBECONFIG=/etc/kubernetes/admin.conf
+      kubectl apply -f https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/rbac.yaml
+      kubectl apply -f https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/canal.yaml
+      kubeadm token create --print-join-command > /shared/joincmd
+      kubectl get nodes
+    SHELL
+  end
+  
+  (1..2).each do |i|
+    config.vm.define "node#{i}" do |subconfig|
+      subconfig.vm.box = BOX_IMAGE
+      subconfig.vm.hostname = "node#{i}"
+      subconfig.vm.synced_folder "shared/", "/shared"
+      subconfig.vm.network :private_network, ip: "10.0.0.#{i + 10}"
+      subconfig.vm.provider "virtualbox" do |v|
+        v.memory = 2048
+        v.cpus = 2
+      end
+      subconfig.vm.provision "bootstrap", type: "shell", inline: $script
+      subconfig.vm.provision "kubernetes", type: "shell", inline: <<-SHELL
+        kubeadm reset
+        . /shared/joincmd
+      SHELL
+    end
+  end
+
+  # Install avahi on all machines  
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get install -y avahi-daemon libnss-mdns
+  SHELL
+end
