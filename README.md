@@ -23,6 +23,3 @@ Also examples showing integration of consul.
 
 Openstack Queens (devstack) via Vagrant.
 
-## gce
-
-simple terraform example for Google Cloud
